@@ -1,0 +1,77 @@
+Kondicione promenljive (pthread_cond_t) su mehanizam sinhronizacije u POSIX nitima koji omogućava efikasno čekanje i obaveštavanje između niti.
+Kondicione promenljive se koriste kada jedna nit mora da čeka na određeni uslov pre nego što nastavi rad.
+
+
+pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex)
+
+Ova funkcija koristi se kada neka nit treba da sačeka određeni uslov pre nego što nastavi izvršavanje.
+Radi sledeće korake:
+- Otključava mutex, tako da druge niti mogu da ga koriste.
+- Blokira trenutnu nit i stavlja je u stanje čekanja na signal na cond promenljivoj.
+- Kada se signal primi (pthread_cond_signal() ili pthread_cond_broadcast()), ponovo zaključava mutex i nastavlja izvršavanje.
+
+## Uvek koristite while umesto if kada koristite pthread_cond_wait(). ##
+Zašto pthread_cond_wait() mora da se koristi unutar while petlje?
+Zato što nit može da se probudi iako nije primila signal (spurious wakeup).
+Rešenje: Uvek proveriti uslov u while petlji, pre nego što se nastavi rad.
+
+
+Šta je Spurious Wakeup?
+Spurious wakeup je situacija u kojoj nit koja poziva pthread_cond_wait() može biti probuđena bez da je primila signal (pthread_cond_signal() ili pthread_cond_broadcast()).
+Drugim rečima, nit može izaći iz pthread_cond_wait() čak i ako uslov još nije ispunjen iako nije eksplicitno probuđena drugom niti.
+
+Spurious wakeup se javlja zbog načina na koji operativni sistem upravlja nitima i sinhronizacijom. 
+Uzroci uključuju:
+- Optimizacije operativnog sistema – OS može probuditi niti radi efikasnijeg raspoređivanja resursa.
+- Lažna signalizacija – Kondiciona promenljiva može biti aktivirana zbog internih promena u planeru izvršavanja (scheduler).
+- Više niti prima signal istovremeno – Kada više niti čeka na istu cond promenljivu, jedna može "preduhitriti" drugu.
+- Spajanje signala (lost wakeup) – Ako pthread_cond_signal() dolazi neposredno pre pthread_cond_wait(), signal može biti izgubljen.
+
+
+pthread_cond_signal(pthread_cond_t *cond)
+Ova funkcija budi jednu nit koja je blokirana na pthread_cond_wait().
+
+
+
+pthread_cond_broadcast(pthread_cond_t *cond)
+Ova funkcija budi sve niti koje čekaju na cond promenljivoj.
+Koristi se kada više niti može biti blokirano i sve treba da budu probuđene.
+
+
+
+Kada koristiti pthread_cond_signal() a kada pthread_cond_broadcast()?
+- pthread_cond_signal() koristimo ako znamo da samo jedna nit treba da nastavi.
+- pthread_cond_broadcast() koristimo ako više niti zavisi od promene stanja.
+
+
+
+pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex, const struct timespec *abstime)
+Radi slično kao pthread_cond_wait(), ali ako uslov nije ispunjen pre određenog vremena, nit se odblokira i može da proveri da li je vreme isteklo.
+Koristi se kada neka operacija ne treba da traje beskonačno dugo.
+
+
+pthread_cond_wait(): Omogućava niti da efikasno čeka i oslobađa mutex.
+
+pthread_cond_signal(): Probuđuje jednu nit.
+
+pthread_cond_broadcast(): Probuđuje sve niti.
+
+pthread_cond_timedwait(): Kao wait(), ali sa vremenskim ograničenjem.
+
+
+
+
+Binarni semafor vs mutex
+Kada koristimo semafor on nas ne obavezuje da radimo sem_wait() i sem_post() u istom delu koda, ili kodu koji se odnosi na jednu nit.
+Jedna nit moze da uradim sem_wait() a npr, druga sem_post(), dok kada razmisljamo o mutex-u, on se bazira na ownership principu - to znaci da
+ako zelimo da ne dovedemo nas program u nekonzistentno stanje treba da od strane jedne niti radimo i mutex_lock() i mutex_unlock(), jer je mutex
+kao koncept mnogo vise baziran na tom odnosu lock-a i konkretne niti koja ga trenutno ima nego semafor. Mutex je pouzdaniji mehanizam za race condition scenarije,
+jer sinhronizuje po ownership principu, a semafor ako nije binarni moze da propusti vise niti odjednom, a od kasnijeg koda zavisi sta sve moze da se
+(ne )iskomplikuje.
+
+ 
+
+
+
+
+
